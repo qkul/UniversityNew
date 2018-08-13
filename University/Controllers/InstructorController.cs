@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Web.Mvc;
 using University.DAL;
+using University.Infrastructure;
 using University.Models;
 using University.ViewModels;
 
@@ -12,13 +13,18 @@ namespace University.Controllers
 {
     public class InstructorController : Controller
     {
-        private SchoolContext db = new SchoolContext();
+       // private SchoolContext db = new SchoolContext();
+        private readonly IInstructorRepository instructorRepository;
 
+        public InstructorController(IInstructorRepository instructorRepository)
+        {
+            this.instructorRepository = instructorRepository;
+        }
         // GET: Instructor
         public ActionResult Index(int? id, int? courseID)
         {
             var viewModel = new InstructorIndexData();
-            viewModel.Instructors = db.Instructors
+            viewModel.Instructors = instructorRepository.Instructors
                 .Include(i => i.OfficeAssignment)
                 .Include(i => i.Courses.Select(c => c.Department)) //метод загружает курсов, и для каждого курса, который загружается как Безотложная загрузка и для Course.Department свойства навигации.
                 .OrderBy(i => i.LastName);
@@ -47,7 +53,7 @@ namespace University.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Instructor instructor = db.Instructors.Find(id);
+            var instructor = instructorRepository.GetInstructor((int)id);
             if (instructor == null)
             {
                 return HttpNotFound();
@@ -58,7 +64,7 @@ namespace University.Controllers
         // GET: Instructor/Create
         public ActionResult Create()
         {
-            ViewBag.ID = new SelectList(db.OfficeAssignments, "InstructorID", "Location");
+            ViewBag.ID = instructorRepository.GetOfficeAssignments();
             return View();
         }
 
@@ -71,12 +77,11 @@ namespace University.Controllers
         {
             if (ModelState.IsValid)
             {
-                db.Instructors.Add(instructor);
-                db.SaveChanges();
+                instructorRepository.AddInstructor(instructor);
                 return RedirectToAction("Index");
             }
 
-            ViewBag.ID = new SelectList(db.OfficeAssignments, "InstructorID", "Location", instructor.ID);
+            ViewBag.ID = instructorRepository.GetOfficeAssignments(instructor);
             return View(instructor);
         }
 
@@ -87,12 +92,12 @@ namespace University.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Instructor instructor = db.Instructors.Find(id);
+            var instructor = instructorRepository.GetInstructor((int)id);
             if (instructor == null)
             {
                 return HttpNotFound();
             }
-            ViewBag.ID = new SelectList(db.OfficeAssignments, "InstructorID", "Location", instructor.ID);
+            ViewBag.ID = instructorRepository.GetOfficeAssignments(instructor);
             return View(instructor);
         }
 
@@ -105,11 +110,10 @@ namespace University.Controllers
         {
             if (ModelState.IsValid)
             {
-                db.Entry(instructor).State = EntityState.Modified;
-                db.SaveChanges();
+                instructorRepository.EditInstructor(instructor);
                 return RedirectToAction("Index");
             }
-            ViewBag.ID = new SelectList(db.OfficeAssignments, "InstructorID", "Location", instructor.ID);
+            ViewBag.ID = instructorRepository.GetOfficeAssignments(instructor);
             return View(instructor);
         }
 
@@ -120,7 +124,7 @@ namespace University.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Instructor instructor = db.Instructors.Find(id);
+            var instructor = instructorRepository.GetInstructor((int)id) ;
             if (instructor == null)
             {
                 return HttpNotFound();
@@ -133,19 +137,18 @@ namespace University.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult DeleteConfirmed(int id)
         {
-            Instructor instructor = db.Instructors.Find(id);
-            db.Instructors.Remove(instructor);
-            db.SaveChanges();
+            var instructor = instructorRepository.GetInstructor(id);
+            instructorRepository.DeleteInstructor(id);
             return RedirectToAction("Index");
         }
 
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                db.Dispose();
-            }
-            base.Dispose(disposing);
-        }
+        //protected override void Dispose(bool disposing)
+        //{
+        //    if (disposing)
+        //    {
+        //        db.Dispose();
+        //    }
+        //    base.Dispose(disposing);
+        //}
     }
 }

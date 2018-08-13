@@ -4,7 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Net;
 using System.Web.Mvc;
-using University.DAL;
+using University.Infrastructure;
 using University.Models;
 
 //Route data ____ url: "{controller}/{action}/{id}",
@@ -12,14 +12,18 @@ namespace University.Controllers
 {
     public class StudentsController : Controller
     {
-        private SchoolContext db = new SchoolContext();
+        private readonly IStudentRepository studentRepository;
 
+        public StudentsController(IStudentRepository studentRepository)
+        {
+            this.studentRepository = studentRepository;
+        }
         // GET: Students
         public ViewResult Index(string sortOrder, string currentFilter, string searchString, int? page)
         {//that the view can configuer the column hyperlinks
             ViewBag.CurrentSort = sortOrder;
-            ViewBag.NameSortParm = String.IsNullOrEmpty(sortOrder) ? "name_desc" : "";
-            ViewBag.DateSortParm = sortOrder == "Date" ? "date_desc" : "Date";
+            ViewBag.NameSortParm = String.IsNullOrEmpty(sortOrder) ? Defines.StudentContr.NAME_DESC : String.Empty;
+            ViewBag.DateSortParm = sortOrder == Defines.StudentContr.DATE ? Defines.StudentContr.DATE_DESC: Defines.StudentContr.DATE;
 
             if (searchString != null)
             {
@@ -32,8 +36,8 @@ namespace University.Controllers
 
             ViewBag.CurrentFilter = searchString;
 
-            var students = from s in db.Students
-                           select s;
+            var students = studentRepository.Students;
+
             if (!String.IsNullOrEmpty(searchString))
             {
                 students = students.Where(s => s.LastName.Contains(searchString)
@@ -42,13 +46,13 @@ namespace University.Controllers
             }
             switch (sortOrder)
             {
-                case "name_desc":
+                case Defines.StudentContr.NAME_DESC:
                     students = students.OrderByDescending(s => s.LastName);
                     break;
-                case "Date":
+                case Defines.StudentContr.DATE:
                     students = students.OrderBy(s => s.EnrollmentDate);
                     break;
-                case "date_desc":
+                case Defines.StudentContr.DATE_DESC:
                     students = students.OrderByDescending(s => s.EnrollmentDate);
                     break;
                 default:  // Name ascending 
@@ -70,7 +74,7 @@ namespace University.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Student student = db.Students.Find(id);
+            var student = studentRepository.GetStudent((int)id);
             if (student == null)
             {
                 return HttpNotFound();
@@ -90,20 +94,19 @@ namespace University.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken] // позваляет запретить подделки запросов сайт атак 
         public ActionResult Create([Bind(Include = "LastName, FirstMidName, EnrollmentDate")]Student student)//Bind  является одним из способов защиты от чрезмерной передачи данных в сценариях создания
-        {                           
+        {
             try
             {
                 if (ModelState.IsValid)
                 {
-                    db.Students.Add(student);
-                    db.SaveChanges();
+                    studentRepository.AddStudent(student);
                     return RedirectToAction("Index");
                 }
             }
             catch (DataException /* dex */)
             {
                 //Log the error (uncomment dex variable name and add a line here to write a log.
-                ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists see your system administrator.");
+                ModelState.AddModelError(String.Empty, Defines.EMessage.UNABLE_TO_SAVE_CHANGES);
             }
             return View(student);
         }
@@ -115,7 +118,7 @@ namespace University.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Student student = db.Students.Find(id);
+            var student = studentRepository.GetStudent((int)id);
             if (student == null)
             {
                 return HttpNotFound();
@@ -128,30 +131,28 @@ namespace University.Controllers
         // more details see https://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost, ActionName("Edit")]
         [ValidateAntiForgeryToken]
-        public ActionResult EditPost(int? id)
+        public ActionResult EditPost(int? id, [Bind(Include = "LastName, FirstMidName, EnrollmentDate")]Student student)
         {
             if (id == null)
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
-            }
-            var studentToUpdate = db.Students.Find(id);
-            if (TryUpdateModel(studentToUpdate, "",
-               new string[] { "LastName", "FirstMidName", "EnrollmentDate" }))
-            {
-                try
-                {
-                    db.SaveChanges();
 
-                    return RedirectToAction("Index");
-                }
-                catch (DataException /* dex */)
-                {
-                    //Log the error (uncomment dex variable name and add a line here to write a log.
-                    ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists, see your system administrator.");
-                }
             }
-            return View(studentToUpdate);
+            Student newStudent=null;
+            try
+            {
+                newStudent = studentRepository.EditStudent((int)id, student);
+                return RedirectToAction("Index");
+            }
+            catch (DataException /* dex */)
+            {
+                //Log the error (uncomment dex variable name and add a line here to write a log.
+                ModelState.AddModelError(String.Empty, Defines.EMessage.UNABLE_TO_SAVE_CHANGES);
+            }
+            return View(newStudent);
         }
+
+
 
         // GET: Students/Delete/5
         public ActionResult Delete(int? id, bool? saveChangesError = false)
@@ -162,9 +163,9 @@ namespace University.Controllers
             }
             if (saveChangesError.GetValueOrDefault())
             {
-                ViewBag.ErrorMessage = "Delete failed. Try again, and if the problem persists see your system administrator.";
+                ViewBag.ErrorMessage = Defines.EMessage.DELETE_FAILED;
             }
-            Student student = db.Students.Find(id);
+            var student = studentRepository.GetStudent((int)id);
             if (student == null)
             {
                 return HttpNotFound();
@@ -179,9 +180,7 @@ namespace University.Controllers
         {
             try
             {
-                Student student = db.Students.Find(id);
-                db.Students.Remove(student);
-                db.SaveChanges();
+                studentRepository.DeleteStudent(id);
             }
             catch (DataException/* dex */)
             {
@@ -191,13 +190,13 @@ namespace University.Controllers
             return RedirectToAction("Index");
         }
 
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                db.Dispose();
-            }
-            base.Dispose(disposing);
-        }
+        //protected override void Dispose(bool disposing)
+        //{
+        //    if (disposing)
+        //    {
+        //        studentRepository.Dispose();
+        //    }
+        //    base.Dispose(disposing);
+        //}
     }
 }

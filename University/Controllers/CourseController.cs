@@ -2,19 +2,24 @@
 using System.Linq;
 using System.Net;
 using System.Web.Mvc;
-using University.DAL;
+using University.Infrastructure;
 using University.Models;
 
 namespace University.Controllers
 {
     public class CourseController : Controller
     {
-        private SchoolContext db = new SchoolContext();
+      // private SchoolContext db = new SchoolContext();
+        private readonly ICourseRepository courseRepository;
 
+        public CourseController(ICourseRepository courseRepository)
+        {
+            this.courseRepository = courseRepository;
+        }
         // GET: Course
         public ActionResult Index()
         {
-            var courses = db.Courses.Include(c => c.Department);
+            var courses = courseRepository.Courses.Include(c => c.Department);
             //безотложная загрузка свойства навигации
             return View(courses.ToList());
         }
@@ -26,7 +31,7 @@ namespace University.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Course course = db.Courses.Find(id);
+            var course = courseRepository.GetCourse((int)id);
             if (course == null)
             {
                 return HttpNotFound();
@@ -37,7 +42,7 @@ namespace University.Controllers
         // GET: Course/Create
         public ActionResult Create()
         {
-            ViewBag.DepartmentID = new SelectList(db.Departments, "DepartmentID", "Name");
+            ViewBag.DepartmentID = courseRepository.GetDepartments();
             return View();
         }
 
@@ -50,12 +55,11 @@ namespace University.Controllers
         {
             if (ModelState.IsValid)
             {
-                db.Courses.Add(course);
-                db.SaveChanges();
+              courseRepository.AddCourse(course);
                 return RedirectToAction("Index");
             }
 
-            ViewBag.DepartmentID = new SelectList(db.Departments, "DepartmentID", "Name", course.DepartmentID);
+            ViewBag.DepartmentID = courseRepository.GetDepartments(course);
             return View(course);
         }
 
@@ -66,12 +70,13 @@ namespace University.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Course course = db.Courses.Find(id);
+            var course = courseRepository.GetCourse((int)id);
             if (course == null)
             {
                 return HttpNotFound();
             }
-            ViewBag.DepartmentID = new SelectList(db.Departments, "DepartmentID", "Name", course.DepartmentID);
+            ViewBag.DepartmentID = courseRepository.GetDepartments(course);
+
             return View(course);
         }
 
@@ -84,13 +89,13 @@ namespace University.Controllers
         {
             if (ModelState.IsValid)
             {
-                db.Entry(course).State = EntityState.Modified;
-                db.SaveChanges();
+                courseRepository.EditCourse(course);
                 return RedirectToAction("Index");
             }
-            ViewBag.DepartmentID = new SelectList(db.Departments, "DepartmentID", "Name", course.DepartmentID);
+            ViewBag.DepartmentID = courseRepository.GetDepartments(course);
             return View(course);
         }
+
 
         // GET: Course/Delete/5
         public ActionResult Delete(int? id)
@@ -99,7 +104,8 @@ namespace University.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Course course = db.Courses.Find(id);
+
+            var course = courseRepository.GetCourse((int)id);
             if (course == null)
             {
                 return HttpNotFound();
@@ -112,19 +118,18 @@ namespace University.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult DeleteConfirmed(int id)
         {
-            Course course = db.Courses.Find(id);
-            db.Courses.Remove(course);
-            db.SaveChanges();
+            var course = courseRepository.GetCourse((int)id);
+            courseRepository.DeleteCourse(id);
             return RedirectToAction("Index");
         }
 
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                db.Dispose();
-            }
-            base.Dispose(disposing);
-        }
+        //protected override void Dispose(bool disposing)
+        //{
+        //    if (disposing)
+        //    {
+        //        db.Dispose();
+        //    }
+        //    base.Dispose(disposing);
+        //}
     }
 }
